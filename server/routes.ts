@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { lessons, userProgress, users } from "@db/schema";
+import { lessons, userProgress, users, feedPosts, feedLikes, userSavedPosts } from "@db/schema";
 import { eq, desc, and, sql, not } from "drizzle-orm";
 import { setupAuth } from "./auth";
 import { setupStripe } from "./stripe";
@@ -134,6 +134,92 @@ export function registerRoutes(app: Express): Server {
     }
 
     res.json({ success: true });
+  });
+
+  // Feed routes
+  app.get("/api/feed", async (req, res) => {
+    try {
+      const posts = await db.query.feedPosts.findMany({
+        orderBy: desc(feedPosts.createdAt),
+        with: {
+          author: true,
+        },
+      });
+      res.json(posts);
+    } catch (error: any) {
+      console.error("Error fetching feed:", error);
+      res.status(500).send("Error fetching feed");
+    }
+  });
+
+  app.post("/api/feed/:id/like", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    const postId = parseInt(req.params.id);
+
+    try {
+      const existing = await db.query.feedLikes.findFirst({
+        where: and(
+          eq(feedLikes.postId, postId),
+          eq(feedLikes.userId, req.user.id)
+        ),
+      });
+
+      if (existing) {
+        // Unlike
+        await db.delete(feedLikes).where(eq(feedLikes.id, existing.id));
+        await db
+          .update(feedPosts)
+          .set({ likes: sql`${feedPosts.likes} - 1` })
+          .where(eq(feedPosts.id, postId));
+      } else {
+        // Like
+        await db.insert(feedLikes).values({
+          userId: req.user.id,
+          postId,
+        });
+        await db
+          .update(feedPosts)
+          .set({ likes: sql`${feedPosts.likes} + 1` })
+          .where(eq(feedPosts.id, postId));
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error liking post:", error);
+      res.status(500).send("Error liking post");
+    }
+  });
+
+  app.post("/api/feed/:id/save", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    const postId = parseInt(req.params.id);
+
+    try {
+      const existing = await db.query.userSavedPosts.findFirst({
+        where: and(
+          eq(userSavedPosts.postId, postId),
+          eq(userSavedPosts.userId, req.user.id)
+        ),
+      });
+
+      if (!existing) {
+        await db.insert(userSavedPosts).values({
+          userId: req.user.id,
+          postId,
+        });
+      }
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error saving post:", error);
+      res.status(500).send("Error saving post");
+    }
   });
 
   const httpServer = createServer(app);
