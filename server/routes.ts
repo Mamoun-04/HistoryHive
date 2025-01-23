@@ -38,11 +38,13 @@ export function registerRoutes(app: Express): Server {
 
     // Get lessons from similar eras that user hasn't completed
     const recommendations = await db.query.lessons.findMany({
-      where: sql`${lessons.era} = ANY(SELECT era FROM lessons WHERE era = ANY(${Array.from(completedEras)}))
-        AND ${lessons.id} NOT IN (
+      where: and(
+        sql`${lessons.era} = ANY(${Array.from(completedEras)})`,
+        sql`${lessons.id} NOT IN (
           SELECT lesson_id FROM user_progress 
           WHERE user_id = ${req.user.id}
-        )`,
+        )`
+      ),
       limit: 5,
       orderBy: desc(lessons.createdAt)
     });
