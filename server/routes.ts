@@ -4,9 +4,11 @@ import { db } from "@db";
 import { lessons, userProgress, users } from "@db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { setupAuth } from "./auth";
+import { setupStripe } from "./stripe";
 
 export function registerRoutes(app: Express): Server {
   setupAuth(app);
+  setupStripe(app);
 
   // Get all lessons
   app.get("/api/lessons", async (req, res) => {
@@ -56,6 +58,11 @@ export function registerRoutes(app: Express): Server {
 
     if (!lesson) {
       return res.status(404).send("Lesson not found");
+    }
+
+    // Check if lesson is premium and user is not subscribed
+    if (lesson.isPremium && req.user && !req.user.isSubscribed) {
+      return res.status(403).send("Premium subscription required");
     }
 
     res.json(lesson);
