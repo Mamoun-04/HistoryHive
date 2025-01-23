@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
 import { lessons, userProgress, users } from "@db/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, not } from "drizzle-orm";
 import { setupAuth } from "./auth";
 import { setupStripe } from "./stripe";
 
@@ -10,9 +10,26 @@ export function registerRoutes(app: Express): Server {
   setupAuth(app);
   setupStripe(app);
 
+  // Create a new lesson (admin only)
+  app.post("/api/lessons", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    // For now, anyone can create lessons. In production, add admin check.
+    try {
+      const newLesson = await db.insert(lessons).values(req.body).returning();
+      res.json(newLesson[0]);
+    } catch (error: any) {
+      res.status(400).send(error.message);
+    }
+  });
+
   // Get all lessons
   app.get("/api/lessons", async (req, res) => {
-    const allLessons = await db.query.lessons.findMany();
+    const allLessons = await db.query.lessons.findMany({
+      orderBy: desc(lessons.createdAt)
+    });
     res.json(allLessons);
   });
 
@@ -22,28 +39,52 @@ export function registerRoutes(app: Express): Server {
       return res.status(401).send("Not authenticated");
     }
 
-    // Get user's completed lessons
-    const completedLessons = await db.query.userProgress.findMany({
-      where: and(
-        eq(userProgress.userId, req.user.id),
-        eq(userProgress.completed, true)
-      ),
-      with: {
-        lesson: true
-      }
-    });
+    try {
+      // Get user's completed lessons
+      const completedProgress = await db.query.userProgress.findMany({
+        where: and(
+          eq(userProgress.userId, req.user.id),
+          eq(userProgress.completed, true)
+        ),
+        with: {
+          lesson: true
+        }
+      });
 
-    // Get user's preferred eras based on completed lessons
-    const completedEras = new Set(completedLessons.map(p => p.lesson.era));
+      const completedLessonIds = completedProgress.map(p => p.lessonId);
+      const completedEras = new Set(completedProgress.map(p => p.lesson.era));
+      const averageCompletionTime = completedProgress.length;
 
-    // Get lessons from similar eras that user hasn't completed
-    const recommendations = await db.query.lessons.findMany({
-      where: eq(lessons.era, Array.from(completedEras)[0] || ''),
-      limit: 5,
-      orderBy: desc(lessons.createdAt)
-    });
+      // Build recommendation query based on multiple factors
+      const recommendations = await db.query.lessons.findMany({
+        where: and(
+          // Exclude completed lessons
+          not(sql`${lessons.id} = ANY(${completedLessonIds})`),
+          // Include lessons from preferred eras
+          sql`${lessons.era} = ANY(${Array.from(completedEras)})`,
+          // Filter by appropriate difficulty (based on completion history)
+          sql`${lessons.estimatedMinutes} BETWEEN ${
+            Math.max(5, averageCompletionTime - 10)
+          } AND ${
+            averageCompletionTime + 10
+          }`
+        ),
+        limit: 5,
+        orderBy: [
+          // Prioritize lessons with completed prerequisites
+          desc(sql`
+            CASE WHEN ${lessons.prerequisites} && ${JSON.stringify(completedLessonIds)}
+            THEN 1 ELSE 0 END
+          `),
+          desc(lessons.createdAt)
+        ]
+      });
 
-    res.json(recommendations);
+      res.json(recommendations);
+    } catch (error: any) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).send("Error generating recommendations");
+    }
   });
 
   // Get specific lesson
@@ -57,7 +98,7 @@ export function registerRoutes(app: Express): Server {
     }
 
     // Check if lesson is premium and user is not subscribed
-    if (lesson.isPremium && req.user && !req.user.isSubscribed) {
+    if (lesson.isPremium && (!req.user || !req.user.isSubscribed)) {
       return res.status(403).send("Premium subscription required");
     }
 
@@ -73,9 +114,10 @@ export function registerRoutes(app: Express): Server {
     const lessonId = parseInt(req.params.id);
 
     const existing = await db.query.userProgress.findFirst({
-      where: (userProgress) => 
-        eq(userProgress.lessonId, lessonId) && 
-        eq(userProgress.userId, req.user!.id)
+      where: and(
+        eq(userProgress.lessonId, lessonId),
+        eq(userProgress.userId, req.user.id)
+      )
     });
 
     if (existing) {
