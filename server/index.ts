@@ -53,7 +53,7 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // Changed port from 5000 to 3000
+  // Changed port from 5000 to 3000 and added "0.0.0.0" to listen on all interfaces
   const PORT = 3000;
   server.listen(PORT, "0.0.0.0", () => {
     log(`serving on port ${PORT}`);
