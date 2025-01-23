@@ -10,17 +10,15 @@ export function registerRoutes(app: Express): Server {
 
   // Get all lessons
   app.get("/api/lessons", async (req, res) => {
-    const allLessons = await db.select().from(lessons);
+    const allLessons = await db.query.lessons.findMany();
     res.json(allLessons);
   });
 
   // Get specific lesson
   app.get("/api/lessons/:id", async (req, res) => {
-    const [lesson] = await db
-      .select()
-      .from(lessons)
-      .where(eq(lessons.id, parseInt(req.params.id)))
-      .limit(1);
+    const lesson = await db.query.lessons.findFirst({
+      where: eq(lessons.id, parseInt(req.params.id))
+    });
 
     if (!lesson) {
       return res.status(404).send("Lesson not found");
@@ -36,13 +34,12 @@ export function registerRoutes(app: Express): Server {
     }
 
     const lessonId = parseInt(req.params.id);
-    
-    const [existing] = await db
-      .select()
-      .from(userProgress)
-      .where(eq(userProgress.lessonId, lessonId))
-      .where(eq(userProgress.userId, req.user.id))
-      .limit(1);
+
+    const existing = await db.query.userProgress.findFirst({
+      where: (userProgress) => 
+        eq(userProgress.lessonId, lessonId) && 
+        eq(userProgress.userId, req.user!.id)
+    });
 
     if (existing) {
       await db
