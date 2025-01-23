@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { db } from "@db";
-import { lessons, userProgress } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { lessons, userProgress, users } from "@db/schema";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { setupAuth } from "./auth";
 
 export function registerRoutes(app: Express): Server {
@@ -12,6 +12,40 @@ export function registerRoutes(app: Express): Server {
   app.get("/api/lessons", async (req, res) => {
     const allLessons = await db.query.lessons.findMany();
     res.json(allLessons);
+  });
+
+  // Get recommended lessons
+  app.get("/api/lessons/recommended", async (req, res) => {
+    if (!req.user) {
+      return res.status(401).send("Not authenticated");
+    }
+
+    // Get user's completed lessons
+    const completedLessons = await db.query.userProgress.findMany({
+      where: and(
+        eq(userProgress.userId, req.user.id),
+        eq(userProgress.completed, true)
+      ),
+      with: {
+        lesson: true
+      }
+    });
+
+    // Get user's preferred eras based on completed lessons
+    const completedEras = new Set(completedLessons.map(p => p.lesson.era));
+
+    // Get lessons from similar eras that user hasn't completed
+    const recommendations = await db.query.lessons.findMany({
+      where: sql`${lessons.era} = ANY(ARRAY[${Array.from(completedEras)}]::text[])
+        AND ${lessons.id} NOT IN (
+          SELECT "lesson_id" FROM ${userProgress}
+          WHERE "user_id" = ${req.user.id}
+        )`,
+      limit: 5,
+      orderBy: desc(lessons.createdAt)
+    });
+
+    res.json(recommendations);
   });
 
   // Get specific lesson

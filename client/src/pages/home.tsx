@@ -10,6 +10,11 @@ export default function Home() {
     queryKey: ["/api/lessons"],
   });
 
+  const { data: recommendedLessons } = useQuery<Lesson[]>({
+    queryKey: ["/api/lessons/recommended"],
+    enabled: !!user, // Only fetch if user is logged in
+  });
+
   return (
     <div className="container mx-auto p-4 space-y-8">
       <header className="text-center mb-8">
@@ -20,6 +25,21 @@ export default function Home() {
       </header>
 
       <TimelineNav />
+
+      {user && recommendedLessons && recommendedLessons.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-2xl font-semibold mb-4">Recommended For You</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {recommendedLessons.map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                isSubscribed={user?.isSubscribed ?? false}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-2xl font-semibold mb-4">Featured Lessons</h2>
