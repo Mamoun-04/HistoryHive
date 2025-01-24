@@ -3,14 +3,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { useUser } from "@/hooks/use-user";
-import { Loader2, BookOpen, Play } from "lucide-react";
+import { Loader2, BookOpen, Play, Compass } from "lucide-react";
 
 import Home from "@/pages/home";
 import Lesson from "@/pages/lesson";
 import Feed from "@/pages/feed";
+import Explore from "@/pages/explore";
 import AuthPage from "@/components/auth/auth-page";
 import NotFound from "@/pages/not-found";
-
 
 function Router() {
   const { user, isLoading } = useUser();
@@ -37,6 +37,10 @@ function Router() {
               <BookOpen className="h-5 w-5" />
               <span>Learn</span>
             </a>
+            <a href="/explore" className={`flex items-center gap-2 p-2 ${location === '/explore' ? 'text-primary' : 'text-muted-foreground'}`}>
+              <Compass className="h-5 w-5" />
+              <span>Explore</span>
+            </a>
             <a href="/feed" className={`flex items-center gap-2 p-2 ${location === '/feed' ? 'text-primary' : 'text-muted-foreground'}`}>
               <Play className="h-5 w-5" />
               <span>Feed</span>
@@ -48,6 +52,7 @@ function Router() {
       <main className="pb-16">
         <Switch>
           <Route path="/" component={Home} />
+          <Route path="/explore" component={Explore} />
           <Route path="/lesson/:id" component={Lesson} />
           <Route path="/feed" component={Feed} />
           <Route path="/era/:id" component={Home} />
