@@ -1,24 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import useEmblaCarousel from "embla-carousel-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@/hooks/use-user";
 import type { FeedPost } from "@db/schema";
-import { Heart, Share2, Bookmark, Loader2 } from "lucide-react";
+import { Heart, Share2, Bookmark, MessageCircle, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { format } from "date-fns";
 
 export default function Feed() {
-  const [emblaRef, emblaApi] = useEmblaCarousel({
-    axis: "y",
-    dragFree: true,
-  });
-
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   const { data: posts, isLoading, error } = useQuery<FeedPost[]>({
     queryKey: ["/api/feed"],
@@ -70,31 +65,34 @@ export default function Feed() {
     },
   });
 
-  const onSelect = useCallback(() => {
-    if (!emblaApi) return;
-    setCurrentIndex(emblaApi.selectedScrollSnap());
-  }, [emblaApi]);
-
-  useEffect(() => {
-    if (!emblaApi) return;
-    emblaApi.on("select", onSelect);
-    return () => {
-      emblaApi.off("select", onSelect);
-    };
-  }, [emblaApi, onSelect]);
-
   if (isLoading) {
     return (
-      <div className="h-screen w-full bg-black flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      <div className="container mx-auto p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader className="space-y-2">
+                <div className="h-4 bg-muted rounded w-3/4"></div>
+                <div className="h-3 bg-muted rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="h-3 bg-muted rounded"></div>
+                  <div className="h-3 bg-muted rounded"></div>
+                  <div className="h-3 bg-muted rounded w-3/4"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="h-screen w-full bg-background p-4 flex items-center justify-center">
-        <Alert variant="destructive" className="max-w-md">
+      <div className="container mx-auto p-4">
+        <Alert variant="destructive">
           <AlertDescription>
             {error instanceof Error ? error.message : "Failed to load feed"}
           </AlertDescription>
@@ -105,7 +103,7 @@ export default function Feed() {
 
   if (!posts || posts.length === 0) {
     return (
-      <div className="h-screen w-full bg-background p-4 flex items-center justify-center">
+      <div className="container mx-auto p-4">
         <Alert>
           <AlertDescription>
             No posts available. Check back later for new content!
@@ -116,87 +114,103 @@ export default function Feed() {
   }
 
   return (
-    <div className="h-screen w-full bg-black">
-      <div className="embla h-full" ref={emblaRef}>
-        <div className="embla__container h-full">
-          {posts.map((post, index) => (
-            <div
-              key={post.id}
-              className={cn(
-                "embla__slide relative h-full w-full flex items-center justify-center",
-                currentIndex === index ? "opacity-100" : "opacity-50"
-              )}
-            >
-              {post.mediaUrl && (
-                <div
-                  className="absolute inset-0 bg-cover bg-center opacity-40"
-                  style={{ backgroundImage: `url(${post.mediaUrl})` }}
+    <div className="container mx-auto py-8">
+      <h1 className="text-4xl font-bold mb-8">Historical Feed</h1>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {posts.map((post) => (
+          <Card key={post.id} className="overflow-hidden">
+            {post.mediaUrl && (
+              <div className="aspect-video relative">
+                <img 
+                  src={post.mediaUrl} 
+                  alt={post.title}
+                  className="object-cover w-full h-full"
                 />
-              )}
-              <div className="relative z-10 max-w-lg mx-auto p-6 text-white">
-                <h2 className="text-2xl font-bold mb-4">{post.title}</h2>
-                <p className="text-lg mb-8">{post.content}</p>
-                <div className="absolute right-4 bottom-20 flex flex-col gap-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full bg-black/50 hover:bg-black/70"
-                    onClick={() => likeMutation.mutate(post.id)}
-                    disabled={likeMutation.isPending}
-                  >
-                    <Heart
-                      className={cn(
-                        "h-6 w-6",
-                        post.likes > 0 ? "fill-red-500 text-red-500" : "text-white",
-                        likeMutation.isPending && "animate-pulse"
-                      )}
-                    />
-                    <span className="sr-only">Like</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full bg-black/50 hover:bg-black/70"
-                    onClick={() => saveMutation.mutate(post.id)}
-                    disabled={saveMutation.isPending}
-                  >
-                    <Bookmark 
-                      className={cn(
-                        "h-6 w-6 text-white",
-                        saveMutation.isPending && "animate-pulse"
-                      )}
-                    />
-                    <span className="sr-only">Save</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full bg-black/50 hover:bg-black/70"
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: post.title,
-                          text: post.content,
-                          url: window.location.href,
-                        }).catch((error) => {
-                          console.error('Error sharing:', error);
-                          toast({
-                            title: "Error",
-                            description: "Failed to share post",
-                            variant: "destructive",
-                          });
-                        });
-                      }
-                    }}
-                  >
-                    <Share2 className="h-6 w-6 text-white" />
-                    <span className="sr-only">Share</span>
-                  </Button>
-                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+            <CardHeader>
+              <CardTitle>{post.title}</CardTitle>
+              <div className="flex items-center text-sm text-muted-foreground">
+                <CalendarClock className="mr-1 h-4 w-4" />
+                {format(new Date(post.createdAt), 'MMM d, yyyy')}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">{post.content}</p>
+              {post.tags && post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {post.tags.map((tag, index) => (
+                    <span 
+                      key={index}
+                      className="bg-secondary text-secondary-foreground px-2 py-1 rounded-full text-sm"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+            <CardFooter className="flex justify-between">
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => likeMutation.mutate(post.id)}
+                  disabled={likeMutation.isPending}
+                >
+                  <Heart
+                    className={cn(
+                      "h-4 w-4",
+                      post.likes > 0 ? "fill-red-500 text-red-500" : "",
+                      likeMutation.isPending && "animate-pulse"
+                    )}
+                  />
+                  <span>{post.likes}</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => saveMutation.mutate(post.id)}
+                  disabled={saveMutation.isPending}
+                >
+                  <Bookmark 
+                    className={cn(
+                      "h-4 w-4",
+                      saveMutation.isPending && "animate-pulse"
+                    )}
+                  />
+                  <span>Save</span>
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="flex items-center gap-1"
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({
+                      title: post.title,
+                      text: post.content,
+                      url: window.location.href,
+                    }).catch((error) => {
+                      console.error('Error sharing:', error);
+                      toast({
+                        title: "Error",
+                        description: "Failed to share post",
+                        variant: "destructive",
+                      });
+                    });
+                  }
+                }}
+              >
+                <Share2 className="h-4 w-4" />
+                <span>Share</span>
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
       </div>
     </div>
   );
