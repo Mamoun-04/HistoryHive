@@ -142,7 +142,12 @@ export function registerRoutes(app: Express): Server {
       const posts = await db.query.feedPosts.findMany({
         orderBy: desc(feedPosts.createdAt),
         with: {
-          author: true,
+          author: {
+            columns: {
+              id: true,
+              username: true,
+            },
+          },
         },
       });
       res.json(posts);
