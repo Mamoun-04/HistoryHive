@@ -22,11 +22,3 @@ This project is a microlearning app designed to make history accessible and enga
 
 ## 📝 Feedback
 Have ideas or suggestions? Feel free to reach out or open an issue on GitHub. Contributions are always welcome!
-
-## 📜 License
-This project is open source and available under the [MIT License](LICENSE).
-
----
-
-Here's my GitHub repo: [Insert GitHub Link]. Looking forward to your feedback and insights!
-
